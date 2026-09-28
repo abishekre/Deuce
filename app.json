@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Deuce",
+    "slug": "deuce",
+    "version": "0.1.0",
+    "scheme": "deuce",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.deuce.client"
+    },
+    "android": {
+      "package": "app.deuce.client",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": ["expo-router", "expo-font", "expo-sqlite"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
