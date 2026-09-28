@@ -112,6 +112,14 @@ export interface MatchState {
   /** Players should change ends now. */
   changeEnds: boolean;
   /**
+   * How many times the players have changed ends so far.
+   *
+   * A scorer uses its parity to mirror the physical court. If the screen does
+   * not swap when the players do, the referee's thumb lands on the wrong half
+   * of the phone for the whole of the next game.
+   */
+  endsChanged: number;
+  /**
    * Rallies recorded after match point, which the fold refused to apply.
    *
    * Two devices briefly scoring the same match is a real offline failure mode.
@@ -119,4 +127,11 @@ export interface MatchState {
    * surplus instead and lets the UI ask a human about it.
    */
   surplusRallyIds: readonly string[];
+}
+
+/** A side one rally away from winning the current game. */
+export interface GamePoint {
+  side: Side;
+  /** Winning that rally would also win the match. */
+  match: boolean;
 }

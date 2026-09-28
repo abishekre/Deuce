@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendRally, RulesError, scoreMatch, undoLastRally, validateFormat } from './engine';
+import { appendRally, gamePoints, RulesError, scoreMatch, undoLastRally, validateFormat } from './engine';
 import { BWF_21, SHORT_11, SINGLE_21 } from './formats';
 import { ralliesFrom, sweep } from './testing';
 import type { MatchFormat } from './types';
@@ -232,5 +232,68 @@ describe('format validation', () => {
 
   it('accepts an uncapped format', () => {
     expect(() => validateFormat({ ...singles, cap: null })).not.toThrow();
+  });
+});
+
+describe('changes of ends', () => {
+  const ends = (log: string, format: MatchFormat = singles) =>
+    scoreMatch(format, ralliesFrom(log)).endsChanged;
+
+  it('counts one change after each game but the last', () => {
+    expect(ends('')).toBe(0);
+    expect(ends(sweep('A', 21))).toBe(1);
+    expect(ends(sweep('A', 21) + 'B')).toBe(1);
+    expect(ends(sweep('A', 21) + sweep('B', 21))).toBe(2);
+  });
+
+  it('adds one more at the interval of the deciding game', () => {
+    const toDecider = sweep('A', 21) + sweep('B', 21);
+
+    expect(ends(toDecider + sweep('A', 10))).toBe(2);
+    expect(ends(toDecider + sweep('A', 11))).toBe(3);
+    expect(ends(toDecider + sweep('A', 21))).toBe(3);
+  });
+
+  it('does not count the end of the match as a change', () => {
+    expect(ends(sweep('A', 42))).toBe(1);
+  });
+
+  it('changes ends at the interval of a one-game match', () => {
+    expect(ends(sweep('A', 11), SINGLE_21('singles'))).toBe(1);
+    expect(ends(sweep('A', 21), SINGLE_21('singles'))).toBe(1);
+  });
+});
+
+describe('game point', () => {
+  const points = (log: string) => gamePoints(scoreMatch(singles, ralliesFrom(log)));
+
+  it('is nobody at love-all or at 20-all', () => {
+    expect(points('')).toEqual([]);
+    expect(points('AB'.repeat(20))).toEqual([]);
+  });
+
+  it('belongs to the side that would reach the target with a margin', () => {
+    expect(points(sweep('A', 20))).toEqual([{ side: 'A', match: false }]);
+    expect(points('AB'.repeat(20) + 'A')).toEqual([{ side: 'A', match: false }]);
+  });
+
+  it('belongs to both sides at 29-all', () => {
+    expect(points('AB'.repeat(29))).toEqual([
+      { side: 'A', match: false },
+      { side: 'B', match: false },
+    ]);
+  });
+
+  it('becomes match point only for the side a game up', () => {
+    expect(points(sweep('A', 21) + sweep('A', 20))).toEqual([{ side: 'A', match: true }]);
+    expect(points(sweep('A', 21) + 'AB'.repeat(29))).toEqual([
+      { side: 'A', match: true },
+      { side: 'B', match: false },
+    ]);
+  });
+
+  it('is nobody during a break or after the match', () => {
+    expect(points(sweep('A', 21))).toEqual([]);
+    expect(points(sweep('A', 42))).toEqual([]);
   });
 });

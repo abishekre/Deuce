@@ -1,5 +1,7 @@
 import {
   opponent,
+  SIDES,
+  type GamePoint,
   type GameState,
   type MatchFormat,
   type MatchState,
@@ -250,8 +252,49 @@ export function scoreMatch(
     rallyCount: applied,
     atInterval,
     changeEnds,
+    endsChanged: countEndChanges(games, format, matchComplete),
     surplusRallyIds,
   };
+}
+
+/**
+ * Ends change after every game but the last, and once more when the leading
+ * score reaches the interval in the deciding game. Counted from the games
+ * rather than tracked through the fold, so it cannot drift from them.
+ */
+function countEndChanges(games: readonly GameState[], format: MatchFormat, matchComplete: boolean): number {
+  const finished = games.filter((g) => g.complete).length;
+  const afterGames = matchComplete ? finished - 1 : finished;
+
+  const decider = games[format.bestOf - 1];
+  const deciderTurned =
+    decider !== undefined &&
+    format.intervalAt !== null &&
+    Math.max(decider.scoreA, decider.scoreB) >= format.intervalAt;
+
+  return afterGames + (deciderTurned ? 1 : 0);
+}
+
+/**
+ * Sides one rally away from winning the current game — what the umpire calls
+ * as "game point" or "match point".
+ *
+ * Both sides can be there at once: at 29-all under a 30 cap, the next rally
+ * wins the game for whoever takes it, and in a match level on games one of
+ * them may be playing for the match while the other only plays for the game.
+ */
+export function gamePoints(state: MatchState): GamePoint[] {
+  const { format, current, gamesWon } = state;
+  if (state.complete || current.complete) return [];
+
+  const needed = gamesToWin(format);
+
+  return SIDES.flatMap((side) => {
+    const mine = (side === 'A' ? current.scoreA : current.scoreB) + 1;
+    const theirs = side === 'A' ? current.scoreB : current.scoreA;
+    if (mine <= theirs || !isGameComplete(mine, theirs, format)) return [];
+    return [{ side, match: gamesWon[side] + 1 >= needed }];
+  });
 }
 
 /**

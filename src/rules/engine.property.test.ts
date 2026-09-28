@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendRally, gamesToWin, scoreMatch, undoLastRally } from './engine';
+import { appendRally, gamePoints, gamesToWin, scoreMatch, undoLastRally } from './engine';
 import { BWF_21, SHORT_11, SHORT_15, SINGLE_21 } from './formats';
 import { makeRandom } from './testing';
 import type { MatchFormat, Rally, Side } from './types';
@@ -225,6 +225,45 @@ describe.each(FORMATS)('%s', (_label, format) => {
       }
 
       expect(scoreMatch(format, shuffled).games).toEqual(scoreMatch(format, log).games);
+    }
+  });
+
+  it('counts a change of ends exactly when it tells players to change', () => {
+    const random = makeRandom(0xe4d5);
+
+    for (let i = 0; i < 60; i++) {
+      const log = randomMatch(format, random);
+      let previous = scoreMatch(format, []).endsChanged;
+
+      for (let k = 1; k <= log.length; k++) {
+        const state = scoreMatch(format, log.slice(0, k));
+        expect(state.endsChanged - previous).toBe(state.changeEnds ? 1 : 0);
+        previous = state.endsChanged;
+      }
+    }
+  });
+
+  it('predicts exactly which rally would finish the game, and the match', () => {
+    const random = makeRandom(0x9a3e);
+
+    for (let i = 0; i < 60; i++) {
+      const log = randomMatch(format, random);
+
+      for (let k = 0; k < log.length; k++) {
+        const prefix = log.slice(0, k);
+        const state = scoreMatch(format, prefix);
+        if (state.complete || state.current.complete) continue;
+
+        const points = gamePoints(state);
+
+        for (const side of ['A', 'B'] as const) {
+          const next = scoreMatch(format, appendRally(prefix, 'probe', side));
+          const point = points.find((p) => p.side === side);
+
+          expect(next.current.complete).toBe(point !== undefined);
+          if (point) expect(next.complete).toBe(point.match);
+        }
+      }
     }
   });
 });
