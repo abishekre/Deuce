@@ -1,9 +1,13 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SIDE_COLOR, useTheme, type Theme } from '@/design/theme';
+import { SIDE_COLOR, STATUS_COLOR, useTheme, type Theme } from '@/design/theme';
+import { LinkSheet } from '@/live/LinkSheet';
+import { liveUrl, shareLiveLink } from '@/live/share';
 import { gamesToWin, opponent, type Side } from '@/rules';
+import { describeSync, type SyncLabel } from '@/sync/protocol';
+import { useMatchSync } from '@/sync/useMatchSync';
 
 import { feel } from './feedback';
 import { lastLiveRally, scoreLocal, type LocalMatch } from './match';
@@ -58,6 +62,23 @@ export function ScorerScreen({ match }: { match: LocalMatch }) {
     if (!last) return;
     undo();
     feel('undo');
+  };
+
+  const sync = describeSync(useMatchSync(match));
+  const [shareNote, setShareNote] = useState<string | null>(null);
+  const [showLink, setShowLink] = useState(false);
+
+  useEffect(() => {
+    if (!shareNote) return;
+    const timer = setTimeout(() => setShareNote(null), 2500);
+    return () => clearTimeout(timer);
+  }, [shareNote]);
+
+  const onShare = async () => {
+    const title = `${sideLabel(match.lineup, 'A')} v ${sideLabel(match.lineup, 'B')}`;
+    const result = await shareLiveLink(match.slug, title);
+    if (result === 'copied') setShareNote('Link copied');
+    if (result === 'unavailable') setShowLink(true);
   };
 
   return (
@@ -122,6 +143,14 @@ export function ScorerScreen({ match }: { match: LocalMatch }) {
             </Text>
           ) : null}
         </View>
+        {sync ? (
+          <LivePill
+            status={sync}
+            note={shareNote}
+            onPress={() => void onShare()}
+            theme={theme}
+          />
+        ) : null}
         {call.tone === 'over' ? (
           <Pressable
             onPress={setAside}
@@ -132,7 +161,47 @@ export function ScorerScreen({ match }: { match: LocalMatch }) {
           </Pressable>
         ) : null}
       </View>
+
+      {showLink ? (
+        <LinkSheet slug={match.slug} url={liveUrl(match.slug)} onClose={() => setShowLink(false)} theme={theme} />
+      ) : null}
     </View>
+  );
+}
+
+/**
+ * Whether the match is reaching spectators, and the way to invite them. One
+ * control rather than two: the moment a referee wonders "is this live?" is
+ * the moment they want to send the link.
+ */
+function LivePill({
+  status,
+  note,
+  onPress,
+  theme,
+}: {
+  status: SyncLabel;
+  note: string | null;
+  onPress: () => void;
+  theme: Theme;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={`Share the live score link. ${note ?? status.text}`}
+      style={({ pressed }) => [
+        styles.livePill,
+        { borderColor: theme.line, backgroundColor: pressed ? theme.line : theme.surface },
+      ]}
+    >
+      <View style={[styles.liveDot, { backgroundColor: STATUS_COLOR[status.tone] }]} />
+      <Text style={[styles.liveText, { color: theme.text }]} numberOfLines={1}>
+        {note ?? status.text}
+      </Text>
+      {note ? null : <Text style={[styles.liveShare, { color: theme.muted }]}>Share</Text>}
+    </Pressable>
   );
 }
 
@@ -236,6 +305,28 @@ const styles = StyleSheet.create({
   },
   serve: {
     fontSize: 17,
+    fontWeight: '600',
+  },
+  livePill: {
+    height: 44,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  liveDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  liveText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  liveShare: {
+    fontSize: 15,
     fontWeight: '600',
   },
   primary: {

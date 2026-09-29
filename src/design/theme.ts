@@ -13,6 +13,16 @@ export const SIDE_COLOR: Record<Side, string> = {
   B: '#2D6CDF',
 };
 
+/**
+ * Connection state. Each clears 3:1 against both surfaces, and the label next
+ * to the dot always says the same thing in words.
+ */
+export const STATUS_COLOR = {
+  good: '#1E9E55',
+  warn: '#B7790A',
+  bad: '#D64545',
+} as const;
+
 const light = {
   background: '#F3F1EB',
   surface: '#FFFFFF',

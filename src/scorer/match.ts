@@ -35,6 +35,13 @@ export type Lineup = Record<Side, readonly string[]>;
  */
 export interface LocalMatch {
   id: string;
+  /** The code in the spectator link. Public. */
+  slug: string;
+  /**
+   * The secret that authorises this device to write the match. Never shown,
+   * never put in a link — handing it over is handing over the whistle.
+   */
+  refereeToken: string;
   startedAt: number;
   format: MatchFormat;
   lineup: Lineup;
@@ -64,9 +71,16 @@ export function lineupFrom(input: MatchInput): Lineup {
   return { A: fill('A', 0), B: fill('B', perSide) };
 }
 
-export function createMatch(input: MatchInput, id: string, now: number): LocalMatch {
+/** Generated on the device, so a match exists — and can be scored — before any network does. */
+export interface MatchIdentity {
+  id: string;
+  slug: string;
+  refereeToken: string;
+}
+
+export function createMatch(input: MatchInput, identity: MatchIdentity, now: number): LocalMatch {
   return {
-    id,
+    ...identity,
     startedAt: now,
     format: FORMAT_PRESETS[input.preset].build(input.discipline),
     lineup: lineupFrom(input),
@@ -76,12 +90,21 @@ export function createMatch(input: MatchInput, id: string, now: number): LocalMa
   };
 }
 
-export function scoreLocal(match: LocalMatch): MatchState {
-  return scoreMatch(match.format, match.rallies, {
-    firstServer: match.firstServer,
+/**
+ * The one fold both screens share. The referee's phone and every spectator's
+ * browser turn the same rally log into the same state with this call, so the
+ * two can never disagree about the score.
+ */
+export function scoreFrom(format: MatchFormat, rallies: readonly Rally[], firstServer: Side): MatchState {
+  return scoreMatch(format, rallies, {
+    firstServer,
     // Names are entered right court first, so player 0 always starts on the right.
     startingRight: { A: 0, B: 0 },
   });
+}
+
+export function scoreLocal(match: LocalMatch): MatchState {
+  return scoreFrom(match.format, match.rallies, match.firstServer);
 }
 
 /** The rally an undo would void, so the button can say whose point it takes back. */

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { uuidv7 } from '@/data/ids';
+import { matchSlug, refereeToken, uuidv7 } from '@/data/ids';
 import { kv } from '@/data/kv';
 import { appendRally, opponent, undoLastRally, type Side } from '@/rules';
 
@@ -38,7 +38,7 @@ export const useScorer = create<ScorerStore>()(
 
       start: (input) =>
         set({
-          match: createMatch(input, uuidv7(), Date.now()),
+          match: createMatch(input, newIdentity(), Date.now()),
           previous: null,
           lastInput: input,
           lastRallyAt: null,
@@ -79,9 +79,23 @@ export const useScorer = create<ScorerStore>()(
     }),
     {
       name: 'deuce.scorer.v1',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => ({ getItem: kv.get, setItem: kv.set, removeItem: kv.remove })),
-      partialize: ({ match, previous, lastInput }) => ({ match, previous, lastInput }),
+      partialize: ({ match, previous, lastInput }): Persisted => ({ match, previous, lastInput }),
+      migrate: (persisted, version) => {
+        const state = persisted as Persisted;
+        if (version >= 2) return state;
+        // Matches scored before live sync existed have no slug or token. Give
+        // them one, so a game already in progress can still go live.
+        const upgrade = (match: LocalMatch | null) => (match && !match.slug ? { ...match, ...newIdentity(), id: match.id } : match);
+        return { ...state, match: upgrade(state.match), previous: upgrade(state.previous) };
+      },
     },
   ),
 );
+
+type Persisted = Pick<ScorerStore, 'match' | 'previous' | 'lastInput'>;
+
+function newIdentity() {
+  return { id: uuidv7(), slug: matchSlug(), refereeToken: refereeToken() };
+}

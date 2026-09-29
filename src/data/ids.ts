@@ -37,3 +37,27 @@ export function uuidv7(): string {
     hex.slice(10, 16).join(''),
   ].join('-');
 }
+
+/**
+ * No I, O, 0 or 1, so a code read aloud across a sports hall or typed from a
+ * screenshot is unambiguous. 32 symbols divide 256 evenly, so taking a random
+ * byte modulo the length introduces no bias.
+ */
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function randomCode(length: number): string {
+  const bytes = Crypto.getRandomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i++) out += ALPHABET[(bytes[i] ?? 0) % ALPHABET.length];
+  return out;
+}
+
+/** The public handle in a spectator link. 50 bits: short enough to share, too many to enumerate. */
+export const matchSlug = (): string => randomCode(10);
+
+/**
+ * The secret that makes this device the referee. 160 bits from the platform
+ * CSPRNG — it is the only thing standing between a spectator and the score,
+ * so it has to be unguessable, not merely unique.
+ */
+export const refereeToken = (): string => randomCode(32);

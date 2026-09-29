@@ -16,9 +16,10 @@ interface Props {
   gamesWon: number;
   gamesNeeded: number;
   point: PointCall;
-  disabled: boolean;
+  disabled?: boolean;
   theme: Theme;
-  onPoint: (side: Side) => void;
+  /** Absent for spectators: the same panel, read-only. */
+  onPoint?: (side: Side) => void;
 }
 
 /**
@@ -46,7 +47,7 @@ export function SidePanel({
   gamesWon,
   gamesNeeded,
   point,
-  disabled,
+  disabled = false,
   theme,
   onPoint,
 }: Props) {
@@ -58,6 +59,71 @@ export function SidePanel({
     setFontSize(scoreFontSize(width, height));
   };
 
+  const body = (pressed: boolean) => (
+    <>
+      <View style={[StyleSheet.absoluteFill, styles.veil, { opacity: pressed ? 1 : 0 }]} />
+
+      <View style={styles.top}>
+        <View style={styles.names}>
+          {names.map((name, index) => {
+            const role = roles[index] ?? null;
+            return (
+              <View key={index} style={styles.nameRow}>
+                <Text style={[styles.name, role === 'serve' && styles.serving]} numberOfLines={1}>
+                  {name}
+                </Text>
+                {role === 'serve' ? (
+                  <Text style={[styles.pill, styles.servePill, { color }]}>SERVE</Text>
+                ) : role === 'receive' ? (
+                  <Text style={[styles.pill, styles.receivePill]}>RECEIVE</Text>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+
+        {point ? (
+          <Text style={[styles.pill, styles.pointPill, { backgroundColor: theme.callout, color: theme.calloutText }]}>
+            {point === 'match' ? 'MATCH POINT' : 'GAME POINT'}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={styles.scoreBox} onLayout={measure}>
+        {fontSize ? (
+          <Text
+            style={[styles.score, { fontSize, lineHeight: Math.round(fontSize * 1.05) }]}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          >
+            {score}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={styles.bottom}>
+        <View style={styles.dots} accessibilityLabel={`${gamesWon} of ${gamesNeeded} games won`}>
+          {Array.from({ length: gamesNeeded }, (_, index) => (
+            <View key={index} style={[styles.dot, index < gamesWon && styles.dotWon]} />
+          ))}
+        </View>
+        {earlier.length > 0 ? <Text style={styles.earlier}>{earlier.join('   ')}</Text> : null}
+      </View>
+    </>
+  );
+
+  if (!onPoint) {
+    return (
+      <View
+        accessible
+        accessibilityLabel={`${label}, ${score}`}
+        style={[styles.panel, { backgroundColor: color }]}
+      >
+        {body(false)}
+      </View>
+    );
+  }
+
   return (
     <Pressable
       onPress={() => onPoint(side)}
@@ -66,58 +132,7 @@ export function SidePanel({
       accessibilityLabel={`Point to ${label}, currently ${score}`}
       style={[styles.panel, { backgroundColor: color }]}
     >
-      {({ pressed }) => (
-        <>
-          <View style={[StyleSheet.absoluteFill, styles.veil, { opacity: pressed ? 1 : 0 }]} />
-
-          <View style={styles.top}>
-            <View style={styles.names}>
-              {names.map((name, index) => {
-                const role = roles[index] ?? null;
-                return (
-                  <View key={index} style={styles.nameRow}>
-                    <Text style={[styles.name, role === 'serve' && styles.serving]} numberOfLines={1}>
-                      {name}
-                    </Text>
-                    {role === 'serve' ? (
-                      <Text style={[styles.pill, styles.servePill, { color }]}>SERVE</Text>
-                    ) : role === 'receive' ? (
-                      <Text style={[styles.pill, styles.receivePill]}>RECEIVE</Text>
-                    ) : null}
-                  </View>
-                );
-              })}
-            </View>
-
-            {point ? (
-              <Text style={[styles.pill, styles.pointPill, { backgroundColor: theme.callout, color: theme.calloutText }]}>
-                {point === 'match' ? 'MATCH POINT' : 'GAME POINT'}
-              </Text>
-            ) : null}
-          </View>
-
-          <View style={styles.scoreBox} onLayout={measure}>
-            {fontSize ? (
-              <Text
-                style={[styles.score, { fontSize, lineHeight: Math.round(fontSize * 1.05) }]}
-                accessibilityElementsHidden
-                importantForAccessibility="no"
-              >
-                {score}
-              </Text>
-            ) : null}
-          </View>
-
-          <View style={styles.bottom}>
-            <View style={styles.dots} accessibilityLabel={`${gamesWon} of ${gamesNeeded} games won`}>
-              {Array.from({ length: gamesNeeded }, (_, index) => (
-                <View key={index} style={[styles.dot, index < gamesWon && styles.dotWon]} />
-              ))}
-            </View>
-            {earlier.length > 0 ? <Text style={styles.earlier}>{earlier.join('   ')}</Text> : null}
-          </View>
-        </>
-      )}
+      {({ pressed }) => body(pressed)}
     </Pressable>
   );
 }
