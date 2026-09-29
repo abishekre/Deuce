@@ -28,7 +28,7 @@ refereed matches in organised events count towards it.
 | Question | Decision |
 |---|---|
 | Customers | Small tournament organisers pay. Players are the network. The friends' club night is the test bed, not the market. |
-| Accounts | **Profiles exist before anyone signs in; players claim them.** Organisers add or import players, whose stats build from their first match. Sign-in is Google (free). Claiming is free through the organiser's WhatsApp invite link, with a WhatsApp OTP (~₹0.2) as the fallback. Organisers and referees sign in to act. Spectators never need an account. |
+| Accounts | **Profiles exist before anyone signs in; players claim them.** Organisers add or import players, whose stats build from their first match. Sign-in is Google (free). Claiming is through the organiser's personal invite link, sent from their own WhatsApp — free, no setup. An OTP is deferred. Organisers and referees sign in to act. Spectators never need an account. |
 | Capture | Point by point. Only the assigned referee can write; everyone else watches live. |
 | Ranking | Glicko-2, separate for singles, doubles and mixed. **Only refereed matches in organised events count.** |
 | Monetisation | **Keys now, entry-fee cut later.** The paywall is built from day one and switched off until the app is popular. |
@@ -93,16 +93,16 @@ rating on Deuce — claim your profile."
 - **Sign-in is Google** through Supabase Auth — free however often people log
   in. Google supplies an email, not a phone, so signing in is never the phone
   check.
-- **Claiming is the one phone check a player ever does:**
-  - *Through an invite link — free.* The organiser sends each player a personal
-    link from their own WhatsApp. Opening it and signing in claims the profile:
-    the link reaching that number is the proof.
-  - *By WhatsApp OTP — about ₹0.2.* For a profile found any other way. Supabase
-    generates and checks the code; its Send SMS hook hands the code to the
-    WhatsApp Cloud API instead of an SMS gateway.
-  - *Disputes.* A mistyped number sends a link to the wrong person, so an
-    OTP-verified claim outranks a link claim: the real owner can always take
-    their profile back.
+- **Claiming is through a personal invite link — free, and no setup.** The
+  organiser sends each player a link from their own WhatsApp; opening it and
+  signing in claims the profile, because the link reaching that number is the
+  proof. A player who never got a link asks the organiser of any event they
+  played in: every organiser can issue a claim link for an unclaimed player
+  they added.
+- **Disputes.** A mistyped number sends a link to the wrong person. The
+  organiser who added the player — or you, as admin — can release the claim
+  and issue a fresh link. If an OTP is added later, a verified phone will
+  outrank a link claim.
 - **Roles belong to an event, not to a person.** The same account organises one
   event, referees another and plays in a third. Organisers invite co-organisers
   and referees by link, and both must sign in — every result has a name behind
@@ -245,12 +245,13 @@ web and only redeem them in the app; check the current policies before launch.
 |---|---|
 | Sign-in (Google through Supabase Auth) | Free |
 | Claiming through an invite link | Free — organisers send links from their own WhatsApp |
-| Claiming by WhatsApp OTP | ₹0.115–0.145 per delivered code (Meta, January 2026) plus 18% GST — about ₹0.2 a claim allowing for retries. No fixed fee through Meta's Cloud API directly |
+| WhatsApp OTP, *deferred* | ₹0.115–0.145 per delivered code (Meta, January 2026) plus 18% GST — about ₹0.2 a claim. Needs a Meta Business account |
 | SMS OTP, *rejected* | ₹0.16–0.25 per SMS plus GST, plus about ₹5,900 a year for the DLT registration TRAI requires of every SMS sender |
 
-Worst case, all 10,000 of a future player base claim by OTP rather than by link:
-about ₹1,800–2,200, once. The trap to avoid: the WhatsApp Business account must
-be registered in India, or every code bills at the international rate.
+Claiming costs nothing today. If an OTP is added later, the worst case — all
+10,000 of a future player base claiming by OTP — is about ₹1,800–2,200, once,
+and the WhatsApp Business account must then be registered in India, or every
+code bills at the international rate.
 
 ## Domain model
 
@@ -325,7 +326,7 @@ every rating change traceable.
 | **M0** | Rules engine — pure, property-tested | Done `25c7ba8` |
 | **M1** | Referee scorer, live sync, spectator link, deployed, offline shell | Done `ea7f2fb`–`9249351` |
 | **M2a** | Draw engine — standings, groups, knockouts | Done `3896d15` |
-| **M2** | Identity: Google sign-in, profiles that exist before sign-in, claiming by invite link, per-event roles, guardians; the scorer requires sign-in. Then claiming by WhatsApp OTP | Next |
+| **M2** | Identity: Google sign-in, profiles that exist before sign-in, claiming by invite link, per-event roles, guardians; the scorer requires sign-in | Next |
 | **M3** | Events: categories, join link, spreadsheet → invite links, pools and brackets on screen, referee assignment, entitlement checks with the paywall off | |
 | **M4** | Courts, "what can run now", court calling | The moat |
 | **M5** | Profiles, stats and Glicko-2 ranking, backfilled from every event match | |
@@ -335,10 +336,8 @@ every rating change traceable.
 **Before M2 can start** — setup only you can do: a Google Cloud OAuth consent
 screen and a web client ID, the Google provider enabled in Supabase with that
 client, and `https://deuce-olive.vercel.app` added to the allowed redirect URLs.
-A native Android client ID comes later, with the Android build. The OTP
-fallback can follow the free link claims, and needs a verified Meta Business
-account, a phone number dedicated to WhatsApp Business, and an approved
-authentication template.
+A native Android client ID comes later, with the Android build. Nothing else:
+claiming needs no messaging provider.
 
 M4 is the one the friends' night cannot test, and it is the reason an organiser
 would abandon the whiteboard. Worth shadowing one real event before building it.
@@ -347,6 +346,11 @@ would abandon the whiteboard. Worth shadowing one real event before building it.
 
 - **Casual matches** — assumed: the scorer signs in; players are profiles,
   picked or created from a phone number, or typed guests with no stats.
+- **An OTP for claims without a link** — deferred; no Meta Business account
+  for now. Two routes when it is wanted: the WhatsApp Cloud API once a Meta
+  Business account exists (about ₹0.2 a claim), or an OTP provider that sends
+  under its own DLT registration, avoiding the ₹5,900 a year — check its terms.
+  Either plugs into Supabase's Send SMS hook without changing the claim flow.
 - **Retirements in ratings** — the provisional rule above needs real data.
 - **Free tier limits and key prices** — per event or as credits; set before M6.
 - **Spectator page weight** — about 380 KB compressed today, the whole app. A
