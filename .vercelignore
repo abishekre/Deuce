@@ -1,0 +1,9 @@
+# Vercel builds from source with its own environment variables, so nothing
+# local needs to travel — least of all .env.
+.env
+.env.*
+!.env.example
+node_modules
+dist
+.expo
+.claude
