@@ -5,8 +5,8 @@
 
 Tournament software for small badminton organisers — the ones running a 120-entry
 local open on a WhatsApp group, an Excel sheet and a whiteboard — and the player
-network that grows out of it: every player signed in, with a profile, stats and
-a rating that follows them from event to event.
+network that grows out of it: every player with a profile, stats and a rating
+that follows them from event to event, waiting for them to claim it.
 
 The competitor is not TournamentSoftware. It is the whiteboard. That means UX
 beats feature count, and it means the bar for "works when the wifi dies in a
@@ -28,12 +28,12 @@ refereed matches in organised events count towards it.
 | Question | Decision |
 |---|---|
 | Customers | Small tournament organisers pay. Players are the network. The friends' club night is the test bed, not the market. |
-| Accounts | **Everyone who plays, organises or referees signs in.** Google sign-in. Spectators never need an account. |
+| Accounts | **Profiles exist before anyone signs in; players claim them.** Organisers add or import players, whose stats build from their first match. Sign-in is Google (free). Claiming is free through the organiser's WhatsApp invite link, with a WhatsApp OTP (~₹0.2) as the fallback. Organisers and referees sign in to act. Spectators never need an account. |
 | Capture | Point by point. Only the assigned referee can write; everyone else watches live. |
 | Ranking | Glicko-2, separate for singles, doubles and mixed. **Only refereed matches in organised events count.** |
 | Monetisation | **Keys now, entry-fee cut later.** The paywall is built from day one and switched off until the app is popular. |
 | Draw formats | Group stage → knockout, automatic or arranged by hand. |
-| Entries | Public join link, plus the organiser's spreadsheet turned into personal invite links. Every entrant signs in to accept. |
+| Entries | The organiser's spreadsheet or manual adds (no sign-in needed to be entered), plus a public join link for players entering themselves (sign-in needed). |
 | Scheduling | Assisted — "what can run now?", organiser decides. |
 | Spectators | Public web link, no account, no install. It is the growth loop. |
 | Codebase | Standalone. Shares no code with ByTwo or the session-rotation tracker. |
@@ -79,21 +79,40 @@ monetisation must be a setting, never a rebuild.
 
 ## Identity and roles
 
-- **Google sign-in** through Supabase Auth. Google supplies a verified email,
-  not a phone number — so the phone is an optional profile field for WhatsApp,
-  never an identity key.
-- **One profile per person**: display name, gender and date of birth (for
-  category eligibility), club, city, optional phone.
-- **Roles belong to an event, not to a person.** The same account is an
-  organiser of one event, a referee at another and a player in a third.
-  Organisers invite co-organisers and referees by link.
+**A profile is a person, not an account.** Organisers create profiles by adding
+or importing players — a name and a phone number — and every match that player
+plays accrues to it from then on. An account is only the key a player uses to
+claim it. The claim is the signup hook: "You have 11 matches and a doubles
+rating on Deuce — claim your profile."
+
+- **The phone number is the private matching key.** Two organisers importing
+  the same person land on the same profile, matched on the normalised number,
+  so stats never split. Numbers stay private: an organiser sees only numbers
+  they entered themselves. Matching happens on the server and reports
+  "already on Deuce", never whose number it is.
+- **Sign-in is Google** through Supabase Auth — free however often people log
+  in. Google supplies an email, not a phone, so signing in is never the phone
+  check.
+- **Claiming is the one phone check a player ever does:**
+  - *Through an invite link — free.* The organiser sends each player a personal
+    link from their own WhatsApp. Opening it and signing in claims the profile:
+    the link reaching that number is the proof.
+  - *By WhatsApp OTP — about ₹0.2.* For a profile found any other way. Supabase
+    generates and checks the code; its Send SMS hook hands the code to the
+    WhatsApp Cloud API instead of an SMS gateway.
+  - *Disputes.* A mistyped number sends a link to the wrong person, so an
+    OTP-verified claim outranks a link claim: the real owner can always take
+    their profile back.
+- **Roles belong to an event, not to a person.** The same account organises one
+  event, referees another and plays in a third. Organisers invite co-organisers
+  and referees by link, and both must sign in — every result has a name behind
+  it.
 - **Juniors cannot sign in themselves** — under-13s have no Google account of
-  their own. A guardian's account creates and manages their child's profile,
-  and gives the parental consent India's DPDP Act requires for a minor's data.
-  Junior profiles are private by default: no public profile and no public
-  ranking until a guardian opts in. (Design intent, not legal advice.)
-- **Contact details stay private.** An organiser sees who entered their event;
-  never anyone else's phone or email.
+  their own. The organiser's invite goes to the guardian's number; the guardian
+  claims the profile under their own account and gives the parental consent
+  India's DPDP Act requires for a minor's data. Junior profiles are private by
+  default: no public profile and no public ranking until a guardian opts in.
+  (Design intent, not legal advice.)
 - **iOS**: the App Store requires Sign in with Apple (or an equivalent) beside
   Google login (guideline 4.8). Needed before an iOS release, not before.
 
@@ -111,7 +130,7 @@ actually occur:
 
 | Situation | Handling |
 |---|---|
-| A enters, names B who has not signed up | Entry created, B invited, B's slot `invited` |
+| A enters, names B by phone | B's profile found or created; entry created, B's slot `invited` |
 | B accepts | Both slots `confirmed` |
 | B enters independently, names A | Mutual declaration → auto-confirm both slots |
 | B enters, names C instead | Conflict. Flag for the organiser; never silently repair |
@@ -132,32 +151,32 @@ validated.
 | Player 2 … | Blank for singles |
 | Seed | Optional; the organiser can seed in the app instead |
 
-Because every entrant signs in, **each row becomes a personal invite link**, not
-a player. The organiser sends them over WhatsApp in one tap each; the player
-signs in and accepts. The import rules still hold:
+**Each row becomes a player straight away** — found by phone, or a new unclaimed
+profile — and also gets a personal invite link. The organiser vouches for their
+own list, so the player is entered whether or not they ever open the link; the
+link is how they claim their profile, not a condition of playing. The organiser
+sends the links over WhatsApp in one tap each. The import rules still hold:
 
-- **Preview before commit, always.** "42 invites ready, 2 rows need attention."
+- **Preview before commit, always.** "42 players ready, 5 already on Deuce,
+  2 rows need attention."
 - **Row-level errors never block the good rows.**
 - **Re-import is idempotent.** Organisers *will* re-import after edits; a row
   already invited is recognised, not invited twice.
 - Accept `.xlsx` directly. "Save as CSV" is friction at the worst moment.
 
-An entry is `confirmed` only when every player in it has signed in and
-accepted. The draw generator refuses to run on unconfirmed entries unless the
-organiser removes them — that prompt is the whole feature, because the failure
-it prevents is a bracket built around a pair who were never really entered.
-
-**The known cost of mandatory sign-in** is entrants who will not or cannot sign
-up in time. Mitigations: personal invite links, a dashboard showing exactly who
-has not accepted with a one-tap WhatsApp nudge, and signing in at the desk on
-the day, which is thirty seconds with Google. Measure it at the first real
-event.
+An entry the organiser added is `confirmed` from the start. One a player
+created through the join link is `confirmed` once their partner accepts, or the
+organiser confirms it. The draw generator refuses to run on unconfirmed entries
+unless the organiser removes them — that prompt is the whole feature, because
+the failure it prevents is a bracket built around a pair who were never really
+entered.
 
 ### Casual matches
 
-The M1 scorer stays free. The person scoring is signed in; each player is either
-a linked profile, whose stats count, or a typed guest, who gets none. Casual
-matches never count towards the ranking.
+The M1 scorer stays free. The person scoring is signed in; each player is a
+profile — picked, or created on the spot from a name and phone — whose stats
+count, or a typed guest with no phone, who gets none. Casual matches never
+count towards the ranking.
 
 ## Draws — built (M2a)
 
@@ -220,20 +239,33 @@ settlement and KYC for every organiser. After M4.
 — and a 15–30% cut — for digital features bought inside an app. Sell keys on the
 web and only redeem them in the app; check the current policies before launch.
 
+## Running costs
+
+| Item | Cost |
+|---|---|
+| Sign-in (Google through Supabase Auth) | Free |
+| Claiming through an invite link | Free — organisers send links from their own WhatsApp |
+| Claiming by WhatsApp OTP | ₹0.115–0.145 per delivered code (Meta, January 2026) plus 18% GST — about ₹0.2 a claim allowing for retries. No fixed fee through Meta's Cloud API directly |
+| SMS OTP, *rejected* | ₹0.16–0.25 per SMS plus GST, plus about ₹5,900 a year for the DLT registration TRAI requires of every SMS sender |
+
+Worst case, all 10,000 of a future player base claim by OTP rather than by link:
+about ₹1,800–2,200, once. The trap to avoid: the WhatsApp Business account must
+be registered in India, or every code bills at the international rate.
+
 ## Domain model
 
 ```
-profile           one per person: name, gender, dob, club, city, phone?
-guardianship      guardian profile → junior profile, consent_at
+profile           one per person: name, gender, dob, club, city,
+                  phone_e164 (private), claimed_by?, claimed_via (link | otp)?
+guardianship      guardian account → junior profile, consent_at
 
 event             organiser, venue, dates, court_count, public_slug, status, tier
 category          event, discipline (MS/WS/MD/WD/XD), age/level limits,
                   draw_type, format_config
 event_role        event, profile, role (organiser | referee)
-invite            event, category?, name, phone?, token_hash, accepted_by?
+invite            profile, event?, token_hash, accepted_by?
 entry             category, seed?, state (pending | confirmed | withdrawn)
-entry_player      entry, profile?, invite?, slot (0|1),
-                  state (invited | confirmed)
+entry_player      entry, profile, slot (0|1), state (invited | confirmed)
 
 group             category, label
 group_slot        group, entry, position       <- editable, organiser overrides
@@ -255,8 +287,9 @@ import_batch      event, source_file, committed_at, row_results
 
 Choices that are cheap now and expensive later:
 
-**`profile` is global.** It is the whole retention layer: "Arun — 47 matches
-across 3 events, 62%, doubles rating 1640".
+**`profile` is global, and exists before its owner signs in.** It is the whole
+retention layer — "Arun — 47 matches across 3 events, 62%, doubles rating
+1640" — and it is already waiting, full, on the day Arun claims it.
 
 **`outcome` is first class.** Small tournaments are full of no-shows, injuries
 and pairs who never turn up for the plate event, and 16.2.5 turns each of those
@@ -292,7 +325,7 @@ every rating change traceable.
 | **M0** | Rules engine — pure, property-tested | Done `25c7ba8` |
 | **M1** | Referee scorer, live sync, spectator link, deployed, offline shell | Done `ea7f2fb`–`9249351` |
 | **M2a** | Draw engine — standings, groups, knockouts | Done `3896d15` |
-| **M2** | Identity: Google sign-in, profiles, guardians, per-event roles; the scorer requires sign-in | Next |
+| **M2** | Identity: Google sign-in, profiles that exist before sign-in, claiming by invite link, per-event roles, guardians; the scorer requires sign-in. Then claiming by WhatsApp OTP | Next |
 | **M3** | Events: categories, join link, spreadsheet → invite links, pools and brackets on screen, referee assignment, entitlement checks with the paywall off | |
 | **M4** | Courts, "what can run now", court calling | The moat |
 | **M5** | Profiles, stats and Glicko-2 ranking, backfilled from every event match | |
@@ -302,15 +335,18 @@ every rating change traceable.
 **Before M2 can start** — setup only you can do: a Google Cloud OAuth consent
 screen and a web client ID, the Google provider enabled in Supabase with that
 client, and `https://deuce-olive.vercel.app` added to the allowed redirect URLs.
-A native Android client ID comes later, with the Android build.
+A native Android client ID comes later, with the Android build. The OTP
+fallback can follow the free link claims, and needs a verified Meta Business
+account, a phone number dedicated to WhatsApp Business, and an approved
+authentication template.
 
 M4 is the one the friends' night cannot test, and it is the reason an organiser
 would abandon the whiteboard. Worth shadowing one real event before building it.
 
 ## Open questions
 
-- **Casual matches** — assumed: the scorer signs in; players are linked
-  profiles or typed guests. Confirm, or require all four to sign in.
+- **Casual matches** — assumed: the scorer signs in; players are profiles,
+  picked or created from a phone number, or typed guests with no stats.
 - **Retirements in ratings** — the provisional rule above needs real data.
 - **Free tier limits and key prices** — per event or as credits; set before M6.
 - **Spectator page weight** — about 380 KB compressed today, the whole app. A
