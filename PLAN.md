@@ -145,10 +145,16 @@ generator never knows or cares where an entry came from.
 
 ## The four hard problems
 
-1. **Group tie-breaking.** BWF order: matches won → games ratio → points ratio →
-   head-to-head. Three-way ties are fiddly and *will* be disputed by a parent
-   holding a phone. The UI must explain itself: "advanced on points ratio 1.08
-   vs 1.02". That sentence prevents arguments.
+1. **Group tie-breaking.** BWF General Competition Regulations 16.2: matches
+   won; two level → head-to-head; three or more level → games *difference*
+   (won − lost, over all group matches), then points difference; whenever a
+   step leaves exactly two level, head-to-head decides; three or more still
+   level → drawing of lots. And 16.2.5: a player who does not complete every
+   group match — injury, disqualification, retiring mid-match — has *all*
+   their results deleted, wins included. Three-way ties are fiddly and *will*
+   be disputed by a parent holding a phone. The UI must explain itself:
+   "second on games difference, +2 against +1". That sentence prevents
+   arguments.
 2. **Seeding and bye placement.** Byes are not random — they go to top seeds at
    fixed bracket positions. Deterministic, easy to test, embarrassing in public.
 3. **The conflict engine behind "what can run now".** A match is playable only

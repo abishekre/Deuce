@@ -12,6 +12,11 @@ holds the decisions already taken, the domain model, and the milestone order.
 - **`src/rules` stays pure.** No React, no Supabase, no I/O, no imports from
   anywhere else in the app. It runs under bare Node in the tests. The score is
   the one thing a tournament cannot get wrong.
+- **`src/draw` stays pure too**, and may import only from `src/rules`. Group
+  standings follow BWF General Competition Regulations 16.2 to the letter —
+  including 16.2.5, which deletes every result of a player who does not
+  complete the group. Lots are drawn by a person and passed in; the code never
+  invents an order for a genuine tie.
 - **Never store a derived value.** Score, serving side, service court and game
   number are all folded from the rally log. A stored score is a second source
   of truth that will eventually disagree with the first.
