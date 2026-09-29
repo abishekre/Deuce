@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="theme-color" content="#16181B" />
+    <meta name="description" content="Live badminton scoring for small tournaments." />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <title>%WEB_TITLE%</title>
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+      /*
+       * A referee taps fast. Without this, two quick taps on a phone browser
+       * zoom the page mid-rally. Pinch-zoom still works.
+       */
+      html {
+        touch-action: manipulation;
+      }
+    </style>
+    <script>
+      /*
+       * The offline shell. Once a phone has loaded Deuce, it opens again with
+       * no signal, which a sports hall guarantees sooner or later.
+       *
+       * Registered only on a production export, recognised by its hashed
+       * bundle under /_expo/static/. The dev server has no sw.js, and a
+       * service worker left behind on a dev origin serves stale code for days.
+       */
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          if (!document.querySelector('script[src*="/_expo/static/js/web/"]')) return;
+          navigator.serviceWorker.register('/sw.js').catch(function () {
+            // Offline support is a bonus; the app works without it.
+          });
+        });
+      }
+    </script>
+  </head>
+
+  <body>
+    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+  </body>
+</html>

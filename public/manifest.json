@@ -1,0 +1,19 @@
+{
+  "name": "Deuce",
+  "short_name": "Deuce",
+  "description": "Live badminton scoring for small tournaments.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F3F1EB",
+  "theme_color": "#16181B",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
