@@ -4,23 +4,38 @@
 > over. Renaming touches `package.json`, `app.json` and this file, nothing else.
 
 Tournament software for small badminton organisers — the ones running a 120-entry
-local open on a WhatsApp group, an Excel sheet and a whiteboard, who will never
-pay for or be granted access to BWF Tournament Software.
+local open on a WhatsApp group, an Excel sheet and a whiteboard — and the player
+network that grows out of it: every player signed in, with a profile, stats and
+a rating that follows them from event to event.
 
 The competitor is not TournamentSoftware. It is the whiteboard. That means UX
 beats feature count, and it means the bar for "works when the wifi dies in a
 metal-roofed hall" is absolute.
 
+## How it makes money
+
+Players are the network; organisers are the customers. The ranking connects
+them:
+
+> players want a rating that means something → they ask organisers "is this a
+> Deuce event?" → organisers need Deuce to fill their draws → organisers pay.
+
+That makes the ranking load-bearing rather than decorative, and it is why only
+refereed matches in organised events count towards it.
+
 ## Decisions taken
 
 | Question | Decision |
 |---|---|
-| Primary user | Small tournament organisers. The friends' club night is the v0 test bed, not the market. |
-| Capture | Point by point. Only a referee can write; everyone else watches live. |
-| Draw formats | Group stage → knockout. |
-| Entries | Spreadsheet import first, public registration link second. Payments deferred. |
+| Customers | Small tournament organisers pay. Players are the network. The friends' club night is the test bed, not the market. |
+| Accounts | **Everyone who plays, organises or referees signs in.** Google sign-in. Spectators never need an account. |
+| Capture | Point by point. Only the assigned referee can write; everyone else watches live. |
+| Ranking | Glicko-2, separate for singles, doubles and mixed. **Only refereed matches in organised events count.** |
+| Monetisation | **Keys now, entry-fee cut later.** The paywall is built from day one and switched off until the app is popular. |
+| Draw formats | Group stage → knockout, automatic or arranged by hand. |
+| Entries | Public join link, plus the organiser's spreadsheet turned into personal invite links. Every entrant signs in to accept. |
 | Scheduling | Assisted — "what can run now?", organiser decides. |
-| Spectators | Both. Public web link is the front door; app for organisers, referees, players. |
+| Spectators | Public web link, no account, no install. It is the growth loop. |
 | Codebase | Standalone. Shares no code with ByTwo or the session-rotation tracker. |
 
 Group → knockout is the superset format: a round robin is one group with no
@@ -36,8 +51,10 @@ seeding, bye placement and court suggestions are all buttons that produce a
 algorithm's output — so an override is a normal write, not a special case.
 
 **Derive, never store, anything that can be computed.** Score, serving side,
-service court, game number, match state: all folded from the rally log. A stored
-score is a second source of truth that will eventually disagree with the first.
+service court, game number, match state: all folded from the rally log.
+Standings and ratings are derivations too; where they are stored, it is as a
+cache that can be thrown away and rebuilt from history — which is exactly what
+happens when a disputed result is corrected.
 
 **Offline is the normal case, not the failure case.** Sports halls have terrible
 connectivity and a tournament cannot pause for it. Every write is queued locally
@@ -48,149 +65,255 @@ score at a time, with explicit handoff. Without it, two people score the same
 match, the states diverge, and there is no principled way to reconcile — which
 in a tournament means a disputed result and a furious parent.
 
-**Volunteers do not create accounts.** A court gets a PIN. The organiser is the
-only real account that matters.
+**Every result has a name behind it.** Anything that can move a result or a
+rating is written by a signed-in account the organiser appointed. A rating
+change must always be traceable to the person who scored the match.
+
+**A ranking is worth exactly as much as people trust it.** Only refereed matches
+in organised events count. Walkovers never move a rating. When in doubt, a
+match counts for personal stats and not for the ranking.
+
+**Build the gate before the price.** Every paid feature is checked in one place
+from the first line of event code, with the paywall switched off. Turning on
+monetisation must be a setting, never a rebuild.
+
+## Identity and roles
+
+- **Google sign-in** through Supabase Auth. Google supplies a verified email,
+  not a phone number — so the phone is an optional profile field for WhatsApp,
+  never an identity key.
+- **One profile per person**: display name, gender and date of birth (for
+  category eligibility), club, city, optional phone.
+- **Roles belong to an event, not to a person.** The same account is an
+  organiser of one event, a referee at another and a player in a third.
+  Organisers invite co-organisers and referees by link.
+- **Juniors cannot sign in themselves** — under-13s have no Google account of
+  their own. A guardian's account creates and manages their child's profile,
+  and gives the parental consent India's DPDP Act requires for a minor's data.
+  Junior profiles are private by default: no public profile and no public
+  ranking until a guardian opts in. (Design intent, not legal advice.)
+- **Contact details stay private.** An organiser sees who entered their event;
+  never anyone else's phone or email.
+- **iOS**: the App Store requires Sign in with Apple (or an equivalent) beside
+  Google login (guideline 4.8). Needed before an iOS release, not before.
+
+## Events and entries
+
+An event has categories (MS, WS, MD, WD, XD, with optional age and level
+limits). Players get in two ways, and both end in the same `entry` rows, so the
+draw never knows or cares where an entry came from.
+
+### Public join link
+
+A player opens the link, signs in, picks categories and names their partner.
+The partner gets an invite and accepts after signing in. The states that
+actually occur:
+
+| Situation | Handling |
+|---|---|
+| A enters, names B who has not signed up | Entry created, B invited, B's slot `invited` |
+| B accepts | Both slots `confirmed` |
+| B enters independently, names A | Mutual declaration → auto-confirm both slots |
+| B enters, names C instead | Conflict. Flag for the organiser; never silently repair |
+| A enters "need a partner" | Entry with one slot open; organiser or a later player fills it |
+| B never accepts | Entry stays `pending`; organiser confirms, reassigns or withdraws |
+
+### The organiser's spreadsheet
+
+Every organiser already has the list in Excel. Ship a downloadable `.xlsx`
+template — the template is the feature, because a free-form sheet cannot be
+validated.
+
+| Column | Notes |
+|---|---|
+| Category | Must match a category already created in the event |
+| Player 1 name, phone | Phone is where the invite link goes |
+| Player 1 gender / DOB / club | Optional; DOB only for age categories |
+| Player 2 … | Blank for singles |
+| Seed | Optional; the organiser can seed in the app instead |
+
+Because every entrant signs in, **each row becomes a personal invite link**, not
+a player. The organiser sends them over WhatsApp in one tap each; the player
+signs in and accepts. The import rules still hold:
+
+- **Preview before commit, always.** "42 invites ready, 2 rows need attention."
+- **Row-level errors never block the good rows.**
+- **Re-import is idempotent.** Organisers *will* re-import after edits; a row
+  already invited is recognised, not invited twice.
+- Accept `.xlsx` directly. "Save as CSV" is friction at the worst moment.
+
+An entry is `confirmed` only when every player in it has signed in and
+accepted. The draw generator refuses to run on unconfirmed entries unless the
+organiser removes them — that prompt is the whole feature, because the failure
+it prevents is a bracket built around a pair who were never really entered.
+
+**The known cost of mandatory sign-in** is entrants who will not or cannot sign
+up in time. Mitigations: personal invite links, a dashboard showing exactly who
+has not accepted with a one-tap WhatsApp nudge, and signing in at the desk on
+the day, which is thirty seconds with Google. Measure it at the first real
+event.
+
+### Casual matches
+
+The M1 scorer stays free. The person scoring is signed in; each player is either
+a linked profile, whose stats count, or a typed guest, who gets none. Casual
+matches never count towards the ranking.
+
+## Draws — built (M2a)
+
+Pure and property-tested in `src/draw`: group standings exactly per BWF General
+Competition Regulations 16.2 (including 16.2.5, which deletes every result of a
+player who does not complete the group), snake-seeded group allocation with a
+replayable draw, round-robin order, standard seeding order, byes to the top
+seeds, and group qualifiers placed so each group's top two meet again only in
+the final. Every output is a draft; the organiser can arrange any of it by
+hand, or build pools entirely by hand.
+
+## Ranking
+
+- **Glicko-2**, not plain Elo. It tracks how certain each rating is, so a new
+  player's rating moves quickly and an established one's slowly, and a player
+  back from six months away is uncertain again.
+- **Separate ratings** for singles, doubles and mixed. In doubles a pair's
+  rating is the mean of the partners', and each partner's update is scaled by
+  their own uncertainty.
+- **The leaderboard shows a cautious rating** — rating minus twice the
+  uncertainty — so three lucky wins cannot top it. Players are provisional
+  until they have played enough rated matches.
+- **One event is one rating period**, which is how Glicko-2 is meant to be fed.
+- **What counts:** completed matches in organised events, scored by an
+  appointed referee account. Walkovers never count. A retirement counts only if
+  at least one game was completed (provisional — revisit with real data).
+- **Built from history.** Every rating is recomputable from the rally logs, so
+  ranking can ship after events do and backfill every match ever played. The
+  only thing needed now is that event matches link to real profiles.
+- **Honest scope.** Ratings are only comparable between players who are
+  connected by matches. Leaderboards start per city and go wider as the pools
+  connect.
+
+## Monetisation
+
+**Now:** everything is free. The paywall exists and is switched off.
+
+**From day one:** every event has a tier, and every paid feature asks one
+function whether the event may use it.
+
+**Keys (first):** the organiser pays you by UPI, outside the app; you generate a
+single-use key; they redeem it on an event. Keys are stored only as a hash,
+exactly like referee tokens, and redemption is rate-limited against guessing.
+A free trial — the first full event free for each organiser — is a setting.
+
+**Free forever:** casual matches, live scoring, spectator links, player
+profiles and stats, and small events (limit to be set — one category, or a
+modest number of entries).
+
+**Paid, once switched on:** larger events, several categories, the join link
+and invites, the scheduling helper, the hall big-screen display, results
+exports, sponsor logos on spectator pages.
+
+**Entry-fee cut (later):** entrants pay the entry fee in the app, the payment
+gateway settles it to the organiser, and Deuce keeps a percentage. It removes
+the organiser's up-front cost entirely, but needs a gateway with split
+settlement and KYC for every organiser. After M4.
+
+**App-store billing:** Google Play and Apple generally require their own billing
+— and a 15–30% cut — for digital features bought inside an app. Sell keys on the
+web and only redeem them in the app; check the current policies before launch.
 
 ## Domain model
 
 ```
-player            GLOBAL, not per-tournament
-                  name, gender, dob, club, phone, claimed_user_id?
+profile           one per person: name, gender, dob, club, city, phone?
+guardianship      guardian profile → junior profile, consent_at
 
-tournament        organiser, venue, dates, court_count, public_slug, status
-category          discipline (MS/WS/MD/WD/XD), draw_type, format_config, status
-entry             category, seed?, state (pending|confirmed|withdrawn)
-entry_player      entry, player, slot (0|1), state (declared|confirmed)
+event             organiser, venue, dates, court_count, public_slug, status, tier
+category          event, discipline (MS/WS/MD/WD/XD), age/level limits,
+                  draw_type, format_config
+event_role        event, profile, role (organiser | referee)
+invite            event, category?, name, phone?, token_hash, accepted_by?
+entry             category, seed?, state (pending | confirmed | withdrawn)
+entry_player      entry, profile?, invite?, slot (0|1),
+                  state (invited | confirmed)
 
 group             category, label
-group_slot        group, entry, position          <- editable, organiser overrides
+group_slot        group, entry, position       <- editable, organiser overrides
 bracket_slot      category, round, position, entry?, source_ref
-                  created up front as structure, filled as results land
 
 match             category, stage, group?/round?, entry_a?, entry_b?, court?,
-                  state, winner, outcome (normal|walkover|retired|disqualified)
-game              match, game_no, winner          <- derived, cached for queries only
-rally             client_uuid, match, seq, winner_side, voided_by, device_id
+                  referee?, state, winner, outcome (normal | walkover |
+                  retired | disqualified)
+rally             client_uuid, match, seq, winner_side, voided_by, scored_by
 
-court             tournament, number, status, current_match
+court             event, number, status, current_match
 score_lease       match, device, holder, expires_at
-tournament_role   organiser | referee, scoped to court
-import_batch      tournament, source_file, committed_at, row_results
+
+rating            profile, discipline, rating, deviation, volatility
+                  <- a cache of a derivation; rebuildable from history
+event_key         key_hash, grants, created_by, redeemed_by?, redeemed_event?
+import_batch      event, source_file, committed_at, row_results
 ```
 
-Three choices that are cheap now and expensive later:
+Choices that are cheap now and expensive later:
 
-**`player` is global.** Costs nothing today. It is the only reason the app can
-ever show "Arun — 47 matches across 3 tournaments, 62%", which is the retention
-layer sitting above a tool organisers otherwise open four times a year.
+**`profile` is global.** It is the whole retention layer: "Arun — 47 matches
+across 3 events, 62%, doubles rating 1640".
 
 **`outcome` is first class.** Small tournaments are full of no-shows, injuries
-and pairs who never turn up for the plate event. A model that only knows
-"someone won 21-18" needs walkovers hacked into it within the first real event.
+and pairs who never turn up for the plate event, and 16.2.5 turns each of those
+into deleted group results.
 
-**`rally` carries no game number.** The fold knows when a game ended. Storing it
-invites disagreement between the stored value and the derived one, and it makes
-undo across a game boundary a special case instead of just dropping a row.
+**`rally` carries no game number, and does carry `scored_by`.** The fold knows
+when a game ended; storing it invites disagreement. Who scored it is what makes
+every rating change traceable.
 
-## Getting entries in
+**`event.tier` exists before there is anything to pay for.**
 
-Two paths, and the spreadsheet one ships first because every organiser already
-has the list in Excel before they have heard of this app.
+## The hard problems
 
-### Spreadsheet import
-
-Ship a downloadable `.xlsx` template. The template is the feature — a
-free-form spreadsheet cannot be validated, and "tidy" is the whole point.
-
-| Column | Notes |
-|---|---|
-| Category | Must match a category already created in the tournament |
-| Player 1 name | Required |
-| Player 1 phone | The dedupe key against the global player table |
-| Player 1 gender / DOB / club | Optional; DOB only needed for age categories |
-| Player 2 … | Blank for singles |
-| Seed | Optional; organiser can seed in-app instead |
-
-Rules that make import safe rather than terrifying:
-
-- **Preview before commit, always.** Show a diff: "42 new players, 3 matched to
-  existing, 2 rows need attention." Never blind-insert.
-- **Row-level errors are non-blocking.** Import the good rows, list the bad ones
-  for correction, allow re-import of just those.
-- **Re-import is idempotent.** Matching on phone means running the same file
-  twice does not duplicate a draw. Organisers *will* re-import after edits.
-- Accept `.xlsx` directly, not CSV-only. Telling an organiser to "save as CSV"
-  is friction at exactly the wrong moment.
-
-### Public registration link
-
-Two players must be able to register independently and end up recognised as one
-pair. The states that actually occur:
-
-| Situation | Handling |
-|---|---|
-| A registers, names B who has no account | Entry created, B is a ghost player, slot state `declared` |
-| B registers independently, names A | Mutual declaration → auto-confirm both slots |
-| B registers, names C instead | Conflict. Flag for the organiser; never silently repair |
-| A registers "need a partner" | Entry with one slot open; organiser or a later player fills it |
-| B never shows up | Entry stays `pending`; organiser confirms, reassigns or withdraws |
-
-An entry is `confirmed` only when every slot is `confirmed`. The draw generator
-refuses to run on a category with pending entries unless the organiser
-explicitly forces it — that prompt is the whole feature, because the failure
-mode it prevents is a bracket built around a pair who were never really entered.
-
-Both paths converge on the same `entry` + `entry_player` rows, so the draw
-generator never knows or cares where an entry came from.
-
-## The four hard problems
-
-1. **Group tie-breaking.** BWF General Competition Regulations 16.2: matches
-   won; two level → head-to-head; three or more level → games *difference*
-   (won − lost, over all group matches), then points difference; whenever a
-   step leaves exactly two level, head-to-head decides; three or more still
-   level → drawing of lots. And 16.2.5: a player who does not complete every
-   group match — injury, disqualification, retiring mid-match — has *all*
-   their results deleted, wins included. Three-way ties are fiddly and *will*
-   be disputed by a parent holding a phone. The UI must explain itself:
-   "second on games difference, +2 against +1". That sentence prevents
-   arguments.
-2. **Seeding and bye placement.** Byes are not random — they go to top seeds at
-   fixed bracket positions. Deterministic, easy to test, embarrassing in public.
+1. **Group tie-breaking** — done, per GCR 16.2, with the deciding rule recorded
+   for every place so the UI can say "second on games difference, +2 against
+   +1". That sentence prevents arguments.
+2. **Seeding and bye placement** — done.
 3. **The conflict engine behind "what can run now".** A match is playable only
    if neither side is on court, both have rested at least N minutes, no player
    is in another live match in another category, and prerequisites are done.
-   Build the full constraint model now, expose it as suggestions. A future
-   auto-scheduler needs exactly this set, so none of the work is thrown away.
-4. **Realtime fan-out.** 300 spectators on per-row `postgres_changes`
-   subscriptions is a cost and scale problem. The referee device writes
-   authoritatively; spectators read via a broadcast channel or a cached
-   endpoint.
+   Build the full constraint model, expose it as suggestions.
+4. **Realtime fan-out** — done: spectators get a content-free poke and refetch
+   through a read-only function, with polling underneath.
+5. **Rating integrity.** Only refereed event matches count, results are
+   attributable, and a corrected result triggers a recompute. Collusion
+   detection comes later, once there is data to look at.
+6. **People who cannot sign in themselves** — juniors, through guardians.
 
 ## Milestones
 
-| | Milestone | Proves | Tested with |
-|---|---|---|---|
-| **M0** | Rules engine — pure TS, no UI, property tested | Scoring correctness, every format | `npm test` |
-| **M1** | Referee scorer + public live view, ad-hoc match | Tap ergonomics, offline, undo, realtime | the friends' club night |
-| **M2** | Tournament shell: categories, spreadsheet import, group→KO generation, bracket render | Draw and tie-break correctness | paper data, by hand |
-| **M3** | Courts, "what can run now", court-call notifications | The moat | one real organiser |
-| **M4** | Public registration link and pairing resolution | Removes the last of the data entry | second real event |
-| **M5** | Hall big-screen display, results export, cross-tournament profiles | Legitimacy, retention | |
-| later | Payments | Monetisation | once M3 has earned it |
+| | Milestone | Status |
+|---|---|---|
+| **M0** | Rules engine — pure, property-tested | Done `25c7ba8` |
+| **M1** | Referee scorer, live sync, spectator link, deployed, offline shell | Done `ea7f2fb`–`9249351` |
+| **M2a** | Draw engine — standings, groups, knockouts | Done `3896d15` |
+| **M2** | Identity: Google sign-in, profiles, guardians, per-event roles; the scorer requires sign-in | Next |
+| **M3** | Events: categories, join link, spreadsheet → invite links, pools and brackets on screen, referee assignment, entitlement checks with the paywall off | |
+| **M4** | Courts, "what can run now", court calling | The moat |
+| **M5** | Profiles, stats and Glicko-2 ranking, backfilled from every event match | |
+| **M6** | Keys and redemption switched on; free trial | |
+| later | Online entry fees with a cut; iOS with Sign in with Apple; big screen; exports | |
 
-M2's correctness needs no tournament — feed it 12 entries and check bye
-placement and tie-breaks by hand.
+**Before M2 can start** — setup only you can do: a Google Cloud OAuth consent
+screen and a web client ID, the Google provider enabled in Supabase with that
+client, and `https://deuce-olive.vercel.app` added to the allowed redirect URLs.
+A native Android client ID comes later, with the Android build.
 
-M3 is the one the friends' night cannot test, and it is the reason an organiser
+M4 is the one the friends' night cannot test, and it is the reason an organiser
 would abandon the whiteboard. Worth shadowing one real event before building it.
 
 ## Open questions
 
-- **Spectator page stack.** A React Native Web bundle is a heavy download for a
-  parent on bad 3G, and that page is both the highest-volume read and the entire
-  growth loop. A separate featherweight server-rendered page is probably right.
-  Decide before M1 ships publicly.
-- **Format presets per category** — which short formats organisers actually cut
-  to when running late. Ask one.
-- **Payments.** Deferred deliberately. Revisit once M3 is proven.
+- **Casual matches** — assumed: the scorer signs in; players are linked
+  profiles or typed guests. Confirm, or require all four to sign in.
+- **Retirements in ratings** — the provisional rule above needs real data.
+- **Free tier limits and key prices** — per event or as credits; set before M6.
+- **Spectator page weight** — about 380 KB compressed today, the whole app. A
+  featherweight spectator page may still be worth it once events are public.
+- **Format presets** — which short formats organisers cut to when running late.
+  Ask one.
