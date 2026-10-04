@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { googleName, useAuth } from '@/auth/session';
 import { SIDE_COLOR, useTheme, type Theme } from '@/design/theme';
 import { FORMAT_PRESETS, SIDES, type Discipline, type FormatPresetKey, type Side } from '@/rules';
 
@@ -32,6 +34,12 @@ const DISCIPLINES: ReadonlyArray<readonly [Discipline, string]> = [
 export function SetupScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const signedIn = useAuth((s) => s.status === 'signedIn');
+  const session = useAuth((s) => s.session);
+  const profile = useAuth((s) => s.profile);
+  const initial = (profile?.displayName || googleName(session) || '?').trim().charAt(0).toUpperCase();
 
   const lastInput = useScorer((s) => s.lastInput);
   const previous = useScorer((s) => s.previous);
@@ -63,10 +71,42 @@ export function SetupScreen() {
           { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 },
         ]}
       >
-        <View>
-          <Text style={[styles.brand, { color: theme.muted }]}>DEUCE</Text>
-          <Text style={[styles.title, { color: theme.text }]}>New match</Text>
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.brand, { color: theme.muted }]}>DEUCE</Text>
+            <Text style={[styles.title, { color: theme.text }]}>New match</Text>
+          </View>
+          {signedIn ? (
+            <Pressable
+              onPress={() => router.push('/profile')}
+              accessibilityRole="button"
+              accessibilityLabel="Your profile"
+              style={({ pressed }) => [styles.avatar, { backgroundColor: theme.text, opacity: pressed ? 0.8 : 1 }]}
+            >
+              <Text style={[styles.avatarText, { color: theme.background }]}>{initial}</Text>
+            </Pressable>
+          ) : null}
         </View>
+
+        {signedIn && profile === null ? (
+          <Pressable
+            onPress={() => router.push('/profile')}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.card,
+              styles.prompt,
+              { backgroundColor: theme.surface, borderColor: theme.line, opacity: pressed ? 0.8 : 1 },
+            ]}
+          >
+            <View style={styles.promptText}>
+              <Text style={[styles.previousTitle, { color: theme.text }]}>Create your player profile</Text>
+              <Text style={[styles.hint, { color: theme.muted }]}>
+                So the matches you play count towards your stats.
+              </Text>
+            </View>
+            <Text style={[styles.chevron, { color: theme.muted }]}>›</Text>
+          </Pressable>
+        ) : null}
 
         {previous ? <PreviousMatch match={previous} onRestore={restore} theme={theme} /> : null}
 
@@ -245,6 +285,35 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 20,
     gap: 22,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  prompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  promptText: {
+    flex: 1,
+    gap: 2,
+  },
+  chevron: {
+    fontSize: 28,
+    fontWeight: '300',
   },
   brand: {
     fontSize: 13,

@@ -32,6 +32,8 @@ const light = {
   /** Game point, match point, anything the umpire says out loud. */
   callout: '#F2C230',
   calloutText: '#16181B',
+  /** Error text. Clears 4.5:1 on the background, which the status red does not. */
+  danger: '#B3261E',
 };
 
 const dark: Theme = {
@@ -42,6 +44,7 @@ const dark: Theme = {
   line: '#2B2F35',
   callout: '#F2C230',
   calloutText: '#16181B',
+  danger: '#F2B8B5',
 };
 
 export type Theme = typeof light;

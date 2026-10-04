@@ -1,5 +1,6 @@
 import { Redirect } from 'expo-router';
 
+import { RequireSignIn } from '@/auth/RequireSignIn';
 import { SetupScreen } from '@/scorer/SetupScreen';
 import { useScorer } from '@/scorer/store';
 
@@ -9,6 +10,10 @@ import { useScorer } from '@/scorer/store';
  */
 export default function Index() {
   const match = useScorer((s) => s.match);
-  if (match) return <Redirect href="/score" />;
-  return <SetupScreen />;
+
+  return (
+    <RequireSignIn>
+      {match ? <Redirect href="/score" /> : <SetupScreen />}
+    </RequireSignIn>
+  );
 }
